@@ -1,971 +1,808 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
-import { AlertTriangle, Activity, TrendingUp, DollarSign, ArrowRight, ArrowDown, ArrowUp, Zap, RefreshCw, Eye, Filter, Clock, Share2, ChevronDown, MessageSquare, X, Send, Bot, MinusCircle, Maximize2, ChevronUp } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Activity, AlertTriangle, TrendingUp, ChevronRight, ArrowRight, ArrowUp, ArrowDown, RefreshCw, Search, Menu, X, MessageSquare, User, Send, AlertCircle, Clock, HelpCircle, FileText, Zap, Settings, BarChart2, ExternalLink, ChevronDown, Eye, Maximize2, Minimize2 } from 'lucide-react';
 
-const StablecoinDashboard = () => {
-  const [timeframe, setTimeframe] = useState('24h');
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantMinimized, setAssistantMinimized] = useState(false);
+// Sample data
+const stablecoinData = [
+  { id: 1, name: 'USDC', price: 0.9997, change: 0.01, risk: 'Low', riskScore: 92, marketCap: '42.8B', liquidity: '1.2B', reserves: { cash: 20, treasuries: 65, commercial: 10, other: 5 } },
+  { id: 2, name: 'USDT', price: 0.9978, change: -0.22, risk: 'Medium', riskScore: 74, marketCap: '83.1B', liquidity: '2.4B', reserves: { cash: 5, treasuries: 82, commercial: 12, other: 1 } },
+  { id: 3, name: 'DAI', price: 1.0014, change: 0.14, risk: 'Low', riskScore: 88, marketCap: '5.3B', liquidity: '0.7B', reserves: { ETH: 55, USDC: 30, other: 15 } },
+  { id: 4, name: 'FRAX', price: 0.9871, change: -1.29, risk: 'High', riskScore: 62, marketCap: '0.9B', liquidity: '0.2B', reserves: { collateral: 85, algo: 15 } }
+];
+
+const pegChartData = [
+  { time: '9AM', USDC: 1.000, USDT: 1.000, DAI: 1.000, FRAX: 0.989 },
+  { time: '10AM', USDC: 1.000, USDT: 0.999, DAI: 1.001, FRAX: 0.988 },
+  { time: '11AM', USDC: 0.999, USDT: 0.998, DAI: 1.001, FRAX: 0.987 },
+  { time: '12PM', USDC: 1.000, USDT: 0.997, DAI: 1.001, FRAX: 0.986 },
+  { time: '1PM', USDC: 1.000, USDT: 0.998, DAI: 1.002, FRAX: 0.988 },
+  { time: '2PM', USDC: 1.000, USDT: 0.998, DAI: 1.001, FRAX: 0.987 },
+  { time: '3PM', USDC: 0.999, USDT: 0.997, DAI: 1.001, FRAX: 0.987 },
+];
+
+const yieldData = [
+  { name: 'Aave', USDC: 3.5, USDT: 4.2, DAI: 3.9 },
+  { name: 'Compound', USDC: 3.8, USDT: 4.5, DAI: 4.1 },
+  { name: 'Curve', USDC: 4.2, USDT: 5.0, DAI: 4.8 },
+  { name: 'Yearn', USDC: 5.1, USDT: 5.8, DAI: 5.2 },
+];
+
+const alertsData = [
+  { id: 1, type: 'high', title: 'FRAX Depeg Risk', message: 'FRAX dropped below $0.99, now at $0.987. Collateral ratio decreased to 87%.', time: '12 min ago' },
+  { id: 2, type: 'medium', title: 'USDT Exchange Flows', message: 'Unusual USDT inflows to exchanges. $128M in the last 3 hours.', time: '35 min ago' },
+  { id: 3, type: 'low', title: 'DAI Stability Update', message: 'MakerDAO increased ETH collateral requirements to 155%.', time: '2 hours ago' },
+  { id: 4, type: 'medium', title: 'USDC Reserve Change', message: 'Circle increased treasury allocation to 65% (+5%) in latest attestation.', time: '3 hours ago' },
+];
+
+// Define reserve chart colors
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
+const StablecoinAIDashboard = () => {
+  const [selectedCoin, setSelectedCoin] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  const [inputMessage, setInputMessage] = useState('');
   const [messages, setMessages] = useState([
-    { 
-      role: 'assistant', 
-      content: 'Hello! I\'m your Stablecoin Intelligence Assistant. I can help you analyze market trends, explain anomalies, or provide insights on specific stablecoins. What would you like to know today?' 
-    }
+    { id: 1, sender: 'ai', message: "👋 Welcome to your Stablecoin Intelligence Dashboard! I'm your AI assistant and I'll help you navigate the stablecoin market safely. I notice FRAX is showing potential depeg risk. Would you like me to explain what's happening?" }
   ]);
-  const [userInput, setUserInput] = useState('');
-  const messagesEndRef = useRef(null);
-
-  // Sample data for charts
-  const pegHistoryData = {
-    '24h': [
-      { time: '8AM', USDC: 1.001, USDT: 0.9993, DAI: 1.0023, FRAX: 0.9782 },
-      { time: '9AM', USDC: 1.000, USDT: 0.9991, DAI: 1.0021, FRAX: 0.9765 },
-      { time: '10AM', USDC: 1.0001, USDT: 0.9987, DAI: 1.0022, FRAX: 0.9745 },
-      { time: '11AM', USDC: 1.0001, USDT: 0.9985, DAI: 1.0025, FRAX: 0.9732 },
-      { time: '12PM', USDC: 1.0002, USDT: 0.9982, DAI: 1.0026, FRAX: 0.9728 },
-      { time: '1PM', USDC: 1.0002, USDT: 0.9979, DAI: 1.0024, FRAX: 0.9725 },
-      { time: '2PM', USDC: 1.0001, USDT: 0.9981, DAI: 1.0023, FRAX: 0.9723 },
-      { time: '3PM', USDC: 1.0002, USDT: 0.9991, DAI: 1.0023, FRAX: 0.9721 },
-    ],
-    '7d': [
-      { time: 'Mon', USDC: 1.0005, USDT: 0.9989, DAI: 1.0025, FRAX: 0.9805 },
-      { time: 'Tue', USDC: 1.0004, USDT: 0.9992, DAI: 1.0022, FRAX: 0.9792 },
-      { time: 'Wed', USDC: 1.0002, USDT: 0.9990, DAI: 1.0020, FRAX: 0.9775 },
-      { time: 'Thu', USDC: 1.0001, USDT: 0.9987, DAI: 1.0023, FRAX: 0.9760 },
-      { time: 'Fri', USDC: 1.0001, USDT: 0.9985, DAI: 1.0025, FRAX: 0.9732 },
-      { time: 'Sat', USDC: 1.0002, USDT: 0.9983, DAI: 1.0024, FRAX: 0.9725 },
-      { time: 'Sun', USDC: 1.0002, USDT: 0.9991, DAI: 1.0023, FRAX: 0.9721 },
-    ],
-    '30d': [
-      { time: 'Week 1', USDC: 1.0004, USDT: 0.9995, DAI: 1.0018, FRAX: 0.9850 },
-      { time: 'Week 2', USDC: 1.0003, USDT: 0.9993, DAI: 1.0020, FRAX: 0.9832 },
-      { time: 'Week 3', USDC: 1.0002, USDT: 0.9990, DAI: 1.0022, FRAX: 0.9795 },
-      { time: 'Week 4', USDC: 1.0002, USDT: 0.9991, DAI: 1.0023, FRAX: 0.9721 },
-    ]
-  };
-
-  const flowsData = {
-    '24h': [
-      { name: 'USDC', inflow: 124.5, outflow: -85.3 },
-      { name: 'USDT', inflow: 210.8, outflow: -245.6 },
-      { name: 'DAI', inflow: 67.2, outflow: -42.8 },
-      { name: 'FRAX', inflow: 43.6, outflow: -78.9 },
-      { name: 'BUSD', inflow: 15.4, outflow: -42.1 },
-    ],
-    '7d': [
-      { name: 'USDC', inflow: 542.3, outflow: -412.5 },
-      { name: 'USDT', inflow: 876.2, outflow: -934.8 },
-      { name: 'DAI', inflow: 312.5, outflow: -276.3 },
-      { name: 'FRAX', inflow: 165.7, outflow: -284.2 },
-      { name: 'BUSD', inflow: 78.2, outflow: -132.9 },
-    ],
-    '30d': [
-      { name: 'USDC', inflow: 1876.5, outflow: -1542.3 },
-      { name: 'USDT', inflow: 3245.8, outflow: -3560.4 },
-      { name: 'DAI', inflow: 965.7, outflow: -842.1 },
-      { name: 'FRAX', inflow: 534.2, outflow: -782.6 },
-      { name: 'BUSD', inflow: 245.1, outflow: -386.2 },
-    ]
-  };
-
-  const correlationData = [
-    { name: 'USDC-ETH', value: 0.12 },
-    { name: 'USDT-ETH', value: 0.31 },
-    { name: 'DAI-ETH', value: 0.18 },
-    { name: 'USDC-BTC', value: 0.09 },
-    { name: 'USDT-BTC', value: 0.22 },
-    { name: 'DAI-BTC', value: 0.14 },
-  ];
-
-  const reserveData = [
-    { name: 'Cash', value: 65 },
-    { name: 'Treasury', value: 20 },
-    { name: 'Commercial Paper', value: 10 },
-    { name: 'Corporate Bonds', value: 5 },
-  ];
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
-  // Simulate refresh action
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  // Connect wallet handler (placeholder)
-  const handleConnectWallet = () => {
-    alert('Wallet connection would be initiated here.');
-  };
+  const [typing, setTyping] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState([
+    "Analyze USDT risks",
+    "Best yield opportunities",
+    "Should I be worried about FRAX?",
+    "Safest stablecoin right now"
+  ]);
   
-  // Scroll to bottom of messages
+  const messagesEndRef = useRef(null);
+  
+  // Auto-scroll to bottom of messages
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
   
-  // Handle sending message to assistant
   const handleSendMessage = () => {
-    if (!userInput.trim()) return;
+    if (inputMessage.trim() === '') return;
     
     // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: userInput }]);
+    const newMessages = [...messages, { id: messages.length + 1, sender: 'user', message: inputMessage }];
+    setMessages(newMessages);
+    setInputMessage('');
+    setTyping(true);
     
-    // Simulate AI response based on user input
+    // Simulate AI response with delay
     setTimeout(() => {
-      let response = '';
+      setTyping(false);
+      let responseMessage = '';
+      const userInput = inputMessage.toLowerCase();
       
-      // Simple pattern matching for demo purposes
-      if (userInput.toLowerCase().includes('usdt') || userInput.toLowerCase().includes('tether')) {
-        response = 'USDT is currently showing some concerning patterns. The reserve composition has shifted with an increase in commercial paper, and there\'s unusual outflow activity. The current price is $0.9991, which is a -0.09% change from the peg.';
-      } else if (userInput.toLowerCase().includes('frax')) {
-        response = 'FRAX is currently at high risk with a price of $0.9721 (-2.79% from peg). The collateral ratio has dropped to 85.2%, and there\'s significant outflow activity. I would recommend caution with FRAX exposure until the algorithmic model stabilizes.';
-      } else if (userInput.toLowerCase().includes('risk') || userInput.toLowerCase().includes('alert')) {
-        response = 'The most significant risk in the market right now is the USDT-USDC Curve Pool imbalance (73%/27% ratio). This pattern has historically preceded depegging events with 86% correlation. Additionally, FRAX is showing algorithmic model stress with potential liquidations if ETH drops another 5%.';
-      } else if (userInput.toLowerCase().includes('explain') || userInput.toLowerCase().includes('analysis')) {
-        response = 'The dashboard shows real-time market data across major stablecoins. The most important indicators to watch are: 1) Peg stability (how close to $1.00), 2) On-chain flows (net inflows/outflows), 3) Liquidity across exchanges, and 4) Correlation with crypto assets like ETH and BTC. Would you like me to explain any specific metric in more detail?';
-      } else {
-        response = 'I\'m analyzing the current stablecoin market conditions. Is there a specific stablecoin or metric you\'d like me to focus on? I can provide insights on USDC, USDT, DAI, or FRAX, or explain the anomalies we\'re currently detecting.';
-      }
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-    }, 1000);
-    
-    // Clear input
-    setUserInput('');
-  };
-
-  // Card component for reusability
-  const Card = ({ title, children, className = "", headerAction = null }) => (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex justify-between items-center">
-          <h2 className="text-base font-medium text-gray-800">{title}</h2>
-          {headerAction}
-        </div>
-      </div>
-      <div className="p-4">
-        {children}
-      </div>
-    </div>
-  );
-
-  // Current data based on timeframe
-  const currentPegData = useMemo(() => pegHistoryData[timeframe], [timeframe]);
-  const currentFlowsData = useMemo(() => flowsData[timeframe], [timeframe]);
-
-  return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <div className="bg-blue-700 text-white p-1.5 rounded">
-                <Activity size={18} />
-              </div>
-              <h1 className="text-xl font-bold text-gray-800">Stablecoin Intelligence</h1>
-              <div className="ml-4 flex space-x-1">
-                <button className={`px-2 py-1 text-xs font-medium rounded ${timeframe === '24h' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`} onClick={() => setTimeframe('24h')}>24H</button>
-                <button className={`px-2 py-1 text-xs font-medium rounded ${timeframe === '7d' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`} onClick={() => setTimeframe('7d')}>7D</button>
-                <button className={`px-2 py-1 text-xs font-medium rounded ${timeframe === '30d' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`} onClick={() => setTimeframe('30d')}>30D</button>
+      if (userInput.includes('usdt') && (userInput.includes('safe') || userInput.includes('risk'))) {
+        setMessages([...newMessages, {
+          id: newMessages.length + 1,
+          sender: 'ai',
+          message: `<div>
+            <p>USDT currently has a <strong>Medium Risk</strong> profile (74/100). Here's my analysis:</p>
+            
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Current price: $0.998 (-0.22% in 24h)</li>
+              <li>Recent reserve attestation shows 82% in US Treasuries, 12% in commercial paper</li>
+              <li>Unusual exchange inflows detected in the last 3 hours ($128M)</li>
+              <li>Historical vulnerability during market stress events</li>
+            </ul>
+            
+            <div class="mt-3 p-2 bg-blue-50 rounded border border-blue-100">
+              <p class="text-sm">I'm tracking exchange flows closely as this pattern has preceded volatility in the past. Would you like me to set up an alert if USDT exchange flows exceed $200M in 24h?</p>
+            </div>
+            
+            <p class="mt-3"><strong>Recommendation:</strong> If you're holding USDT, consider keeping no more than 30-40% of your stablecoin portfolio in it for diversification.</p>
+          </div>`,
+          hasChart: false
+        }]);
+        
+        // Update suggestions based on the conversation
+        setAiSuggestions([
+          "Set up USDT flow alerts",
+          "Compare USDT vs USDC",
+          "Show historical USDT volatility",
+          "What's in USDT reserves?"
+        ]);
+      } 
+      else if (userInput.includes('yield') || userInput.includes('apy') || userInput.includes('earn')) {
+        setMessages([...newMessages, {
+          id: newMessages.length + 1,
+          sender: 'ai',
+          message: `<div>
+            <p>Here are the top yield opportunities for major stablecoins right now:</p>
+            
+            <div class="my-3">
+              <!-- Chart placeholder -->
+              <div class="h-40 bg-gray-50 rounded flex items-center justify-center">
+                [Yield Comparison Chart]
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <button 
-                className="flex items-center text-sm text-gray-500 hover:text-blue-600"
-                onClick={handleRefresh}
-                disabled={isLoading}
-              >
-                <RefreshCw size={14} className={`mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>{isLoading ? 'Refreshing...' : 'Refresh'}</span>
-              </button>
-              <button 
-                className="flex items-center text-sm bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded"
-                onClick={handleConnectWallet}
-              >
-                <Eye size={14} className="mr-1" />
-                <span>Connect Wallet for Portfolio</span>
-              </button>
+            
+            <p class="mb-2"><strong>Best risk-adjusted yields:</strong></p>
+            <ul class="space-y-1 list-disc list-inside">
+              <li><span class="font-medium">USDC on Curve:</span> 4.2% APY (Low risk)</li>
+              <li><span class="font-medium">DAI on Yearn:</span> 5.2% APY (Moderate risk)</li>
+              <li><span class="font-medium">USDT on Aave:</span> 4.2% APY (Medium risk)</li>
+            </ul>
+            
+            <div class="mt-3 p-2 bg-yellow-50 rounded border border-yellow-100">
+              <p class="text-xs font-medium text-yellow-800">⚠️ Warning: Higher yields on FRAX (8-12% range) carry significant depeg risk given current market conditions.</p>
+            </div>
+            
+            <p class="mt-3">Would you like specific platform recommendations based on your risk tolerance?</p>
+          </div>`,
+          hasChart: true,
+          chartType: 'yield'
+        }]);
+        
+        setAiSuggestions([
+          "Low risk yield options only",
+          "Is Curve safe for USDC?",
+          "Compare Aave vs Compound",
+          "What affects stablecoin yields?"
+        ]);
+      }
+      else if (userInput.includes('frax') || userInput.includes('worried')) {
+        setMessages([...newMessages, {
+          id: newMessages.length + 1,
+          sender: 'ai',
+          message: `<div>
+            <p>Yes, there's legitimate concern about FRAX right now. It's showing <strong>High Risk</strong> indicators (62/100):</p>
+            
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Current price: $0.987 (significant -1.29% deviation)</li>
+              <li>Collateral ratio has decreased to 87% (down from 92% last week)</li>
+              <li>Liquidity across DEXs has dropped 24% in 48 hours</li>
+              <li>Large redemptions ongoing - $42M in the last 24 hours</li>
+            </ul>
+            
+            <div class="my-3">
+              <!-- Chart placeholder -->
+              <div class="h-40 bg-gray-50 rounded flex items-center justify-center">
+                [FRAX Peg Chart]
+              </div>
+            </div>
+            
+            <p class="mt-2"><strong>My assessment:</strong> This shows classic early warning signs of potential further depegging. While not yet critical, the trend is concerning.</p>
+            
+            <div class="mt-3 p-2 bg-red-50 rounded border border-red-100">
+              <p class="text-sm"><span class="font-medium">Recommendation:</span> If you're holding FRAX, consider reducing exposure until stabilization occurs. Similar patterns preceded previous algorithmic stablecoin failures.</p>
+            </div>
+          </div>`,
+          hasChart: true,
+          chartType: 'frax'
+        }]);
+        
+        setAiSuggestions([
+          "How bad could FRAX depeg get?",
+          "Alternative to FRAX?",
+          "Set FRAX price alert",
+          "What caused FRAX instability?"
+        ]);
+      }
+      else if (userInput.includes('safest') || userInput.includes('safe stablecoin')) {
+        setMessages([...newMessages, {
+          id: newMessages.length + 1,
+          sender: 'ai',
+          message: `<div>
+            <p>Based on current market conditions and comprehensive risk assessment, here are the safest stablecoins:</p>
+            
+            <div class="mt-3 space-y-2">
+              <div class="p-3 bg-blue-50 rounded border border-blue-100">
+                <p class="font-medium">1. USDC — Risk Score: 92/100 (Low Risk)</p>
+                <ul class="mt-1 space-y-0.5 list-disc list-inside text-sm">
+                  <li>Strong reserve composition (65% US Treasuries, 20% cash)</li>
+                  <li>Transparent monthly attestations by Grant Thornton</li>
+                  <li>High liquidity across centralized and decentralized venues</li>
+                  <li>Strong regulatory compliance in the US</li>
+                </ul>
+              </div>
+              
+              <div class="p-3 bg-blue-50 rounded border border-blue-100">
+                <p class="font-medium">2. DAI — Risk Score: 88/100 (Low Risk)</p>
+                <ul class="mt-1 space-y-0.5 list-disc list-inside text-sm">
+                  <li>Overcollateralized at 155%</li>
+                  <li>Transparent on-chain reserves</li>
+                  <li>Proven resilience during previous market stress events</li>
+                  <li>Adaptive governance mechanism through MakerDAO</li>
+                </ul>
+              </div>
+            </div>
+            
+            <p class="mt-3"><strong>Recommendation:</strong> For maximum safety, USDC currently offers the best combination of stability, transparency, and regulatory compliance. Consider keeping the majority of your stablecoin holdings in USDC if safety is your primary concern.</p>
+          </div>`,
+          hasChart: false
+        }]);
+        
+        setAiSuggestions([
+          "Compare USDC vs DAI risks",
+          "USDC reserve breakdown",
+          "Stablecoin diversification strategy",
+          "Historical stablecoin depegs"
+        ]);
+      }
+      else {
+        setMessages([...newMessages, {
+          id: newMessages.length + 1,
+          sender: 'ai',
+          message: `Based on my analysis of current market conditions, here's what you should know about stablecoins today:
+
+1. **USDC** remains the safest option with strong reserves and regulatory compliance
+2. **USDT** shows some concerning exchange inflows but maintains its peg
+3. **DAI** is stable with healthy collateralization
+4. **FRAX** is experiencing potential depeg risk and requires caution
+
+What specific aspect of stablecoin intelligence would you like me to focus on? I can provide risk assessments, yield opportunities, or detailed analysis of any specific coin.`,
+          hasChart: false
+        }]);
+      }
+    }, 1500);
+  };
+  
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSendMessage();
+    }
+  };
+  
+  const handleSuggestionClick = (suggestion) => {
+    setInputMessage(suggestion);
+    
+    // Optional: Auto-send the suggestion
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+  
+  // Helper function to determine alert icon and color
+  const getAlertStyles = (type) => {
+    switch (type) {
+      case 'high':
+        return { icon: <AlertTriangle size={16} />, bgColor: 'bg-red-50', textColor: 'text-red-700', borderColor: 'border-red-200', iconColor: 'text-red-500' };
+      case 'medium':
+        return { icon: <AlertCircle size={16} />, bgColor: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-200', iconColor: 'text-yellow-500' };
+      case 'low':
+        return { icon: <Activity size={16} />, bgColor: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200', iconColor: 'text-blue-500' };
+      default:
+        return { icon: <Activity size={16} />, bgColor: 'bg-gray-50', textColor: 'text-gray-700', borderColor: 'border-gray-200', iconColor: 'text-gray-500' };
+    }
+  };
+  
+  const renderMessageContent = (content) => {
+    return <div dangerouslySetInnerHTML={{ __html: content }} />;
+  };
+  
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 py-3 px-4">
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center">
+            <div className="bg-blue-600 p-2 rounded-md text-white mr-2">
+              <Activity size={18} />
+            </div>
+            <h1 className="text-xl font-bold text-gray-800">Stablecoin Intelligence</h1>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search size={16} className="text-gray-400" />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Search coins, alerts..." 
+                className="pl-10 pr-4 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button className="flex items-center text-sm text-gray-600">
+              <RefreshCw size={14} className="mr-1" />
+              <span>Refresh</span>
+            </button>
+            <button className="p-1.5 rounded-md hover:bg-gray-100">
+              <Settings size={18} className="text-gray-600" />
+            </button>
+            <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+              <User size={18} />
             </div>
           </div>
         </div>
       </header>
 
-      {/* Dashboard Content */}
-      <main className="flex-grow container mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Market Anomalies Card - High Value Information */}
-          <div className="col-span-12 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-lg border border-amber-200 shadow-sm">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-medium text-amber-800">
-                  <AlertTriangle size={18} className="inline mr-2 text-amber-600" />
-                  Market Anomalies Detected
-                </h2>
-                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Updated 5 min ago</span>
+      {/* Main Content */}
+      <main className="flex-grow container mx-auto p-4 grid grid-cols-12 gap-4">
+        {/* Left Side - Dashboard */}
+        <div className="col-span-12 lg:col-span-8 space-y-4">
+          {/* Dashboard Header with AI Insight */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg text-white p-4 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div className="flex-grow">
+                <h2 className="text-xl font-semibold mb-1">Market Dashboard</h2>
+                <p className="text-blue-100">
+                  <Clock size={14} className="inline mr-1" />
+                  Last updated: Mar 11, 2025, 11:48 AM
+                </p>
+                
+                <div className="mt-3 p-3 bg-white bg-opacity-10 rounded-md backdrop-blur-sm">
+                  <div className="flex items-start">
+                    <Zap size={18} className="text-yellow-300 mt-0.5 mr-2 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">AI Insight: Potential FRAX Instability</p>
+                      <p className="text-sm text-blue-100 mt-0.5">FRAX is showing signs of instability with a 1.29% depeg and decreasing collateral ratio. Similar patterns preceded previous algorithmic stablecoin failures.</p>
+                      <button className="mt-2 text-xs bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-1 rounded-md flex items-center">
+                        View Analysis
+                        <ChevronRight size={14} className="ml-1" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-white bg-opacity-70 p-3 rounded border border-amber-200">
-                  <div className="flex items-start">
-                    <div className="bg-red-100 p-1.5 rounded">
-                      <TrendingUp size={18} className="text-red-600" />
-                    </div>
-                    <div className="ml-2">
-                      <h3 className="text-sm font-medium">USDT-USDC Curve Pool Imbalance</h3>
-                      <p className="text-xs text-gray-600 mt-0.5">Unusual 73%/27% ratio detected (normally 50%/50%). Historical signal of depegging events.</p>
-                      <div className="flex items-center mt-1.5">
-                        <span className="text-xs text-red-600 font-medium">High correlation with May 2023 USDT events</span>
-                        <ArrowRight size={12} className="ml-1 text-red-600" />
-                      </div>
-                    </div>
+              
+              <div className="flex flex-col items-end space-y-2 ml-4">
+                <div className="px-3 py-1.5 bg-red-500 bg-opacity-80 rounded-md text-white text-sm">
+                  <div className="flex items-center">
+                    <AlertTriangle size={14} className="mr-1.5" />
+                    <span>1 Critical Alert</span>
                   </div>
                 </div>
-                <div className="bg-white bg-opacity-70 p-3 rounded border border-amber-200">
-                  <div className="flex items-start">
-                    <div className="bg-amber-100 p-1.5 rounded">
-                      <Share2 size={18} className="text-amber-600" />
-                    </div>
-                    <div className="ml-2">
-                      <h3 className="text-sm font-medium">FRAX Algorithmic Model Stress</h3>
-                      <p className="text-xs text-gray-600 mt-0.5">Collateral ratio dropped to 85.2%. On-chain data shows 48M tokens at risk of liquidation if ETH drops 5% more.</p>
-                      <div className="flex items-center mt-1.5">
-                        <span className="text-xs text-amber-600 font-medium">3 similar events in past 90 days</span>
-                        <ArrowRight size={12} className="ml-1 text-amber-600" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white bg-opacity-70 p-3 rounded border border-amber-200">
-                  <div className="flex items-start">
-                    <div className="bg-blue-100 p-1.5 rounded">
-                      <Activity size={18} className="text-blue-600" />
-                    </div>
-                    <div className="ml-2">
-                      <h3 className="text-sm font-medium">Unusual Cross-Chain Flow Pattern</h3>
-                      <p className="text-xs text-gray-600 mt-0.5">USDC bridging from Ethereum to Binance Chain up 187% in 24h. Historically correlates with regulatory concerns.</p>
-                      <div className="flex items-center mt-1.5">
-                        <span className="text-xs text-blue-600 font-medium">Similar to pre-SEC announcement pattern</span>
-                        <ArrowRight size={12} className="ml-1 text-blue-600" />
-                      </div>
-                    </div>
+                <div className="px-3 py-1.5 bg-yellow-500 bg-opacity-80 rounded-md text-white text-sm">
+                  <div className="flex items-center">
+                    <AlertCircle size={14} className="mr-1.5" />
+                    <span>2 Warnings</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* Advanced Market Watch - Left Column */}
-          <div className="col-span-12 md:col-span-8">
-            <Card 
-              title="Advanced Stablecoin Market Analysis" 
-              headerAction={
-                <button className="text-xs text-gray-500 hover:text-blue-600 flex items-center">
-                  <Filter size={12} className="mr-1" />
-                  Custom View
+          
+          {/* Stablecoin Status Table */}
+          <div className="bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h2 className="text-lg font-medium text-gray-800">Stablecoin Status</h2>
+              <div className="flex items-center text-sm text-blue-600">
+                <a href="#" className="flex items-center">
+                  View All Coins
+                  <ChevronRight size={16} className="ml-1" />
+                </a>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coin</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">24h Change</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risk Score</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market Cap</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liquidity</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {stablecoinData.map(coin => (
+                    <tr 
+                      key={coin.id} 
+                      className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedCoin === coin.id ? 'bg-blue-50' : ''}`}
+                      onClick={() => setSelectedCoin(coin.id)}
+                    >
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center">
+                          <div className={`w-8 h-8 mr-3 rounded-full flex items-center justify-center ${
+                            coin.name === 'USDC' ? 'bg-blue-100 text-blue-700' :
+                            coin.name === 'USDT' ? 'bg-green-100 text-green-700' :
+                            coin.name === 'DAI' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {coin.name.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="font-medium">{coin.name}</div>
+                            <div className="text-xs text-gray-500">USD {coin.name === 'DAI' ? 'Stablecoin' : 'Coin'}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">${coin.price.toFixed(4)}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className={`flex items-center ${
+                          coin.change >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {coin.change >= 0 ? 
+                            <ArrowUp size={14} className="mr-1" /> : 
+                            <ArrowDown size={14} className="mr-1" />}
+                          {Math.abs(coin.change).toFixed(2)}%
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center">
+                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${
+                              coin.riskScore >= 85 ? 'bg-green-500' : 
+                              coin.riskScore >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`} style={{ width: `${coin.riskScore}%` }}></div>
+                          </div>
+                          <span className="ml-2 text-xs font-medium">
+                            {coin.riskScore}/100
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          {coin.risk} Risk
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">${coin.marketCap}</td>
+                      <td className="px-4 py-3 text-sm">${coin.liquidity}</td>
+                      <td className="px-4 py-3 text-right text-sm">
+                        <button className="text-blue-600 hover:text-blue-800">
+                          <ExternalLink size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          {/* Peg Stability Chart */}
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-800">Peg Stability (Last 6 Hours)</h2>
+              <div className="flex items-center space-x-2">
+                <button className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">6H</button>
+                <button className="px-2 py-1 text-xs rounded text-gray-500 hover:bg-gray-100">24H</button>
+                <button className="px-2 py-1 text-xs rounded text-gray-500 hover:bg-gray-100">7D</button>
+              </div>
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={pegChartData} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0.985, 1.005]} tickCount={5} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="USDC" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} name="USDC" />
+                  <Line type="monotone" dataKey="USDT" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4 }} name="USDT" />
+                  <Line type="monotone" dataKey="DAI" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} name="DAI" />
+                  <Line type="monotone" dataKey="FRAX" stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 4 }} name="FRAX" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            {/* AI Insight for Chart */}
+            <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-100">
+              <div className="flex items-start">
+                <Zap size={16} className="text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">AI Analysis:</p>
+                  <p className="text-sm text-blue-600">FRAX shows persistent deviation from peg with negative trend. USDT experiencing minor oscillations potentially indicating market uncertainty. USDC and DAI remain highly stable.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Selected Coin Details (Conditional) */}
+          {selectedCoin && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center">
+                  <div className={`w-10 h-10 mr-3 rounded-full flex items-center justify-center ${
+                    stablecoinData[selectedCoin-1].name === 'USDC' ? 'bg-blue-100 text-blue-700' :
+                    stablecoinData[selectedCoin-1].name === 'USDT' ? 'bg-green-100 text-green-700' :
+                    stablecoinData[selectedCoin-1].name === 'DAI' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {stablecoinData[selectedCoin-1].name.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-medium">{stablecoinData[selectedCoin-1].name}</h2>
+                    <p className="text-gray-500 text-sm">
+                      ${stablecoinData[selectedCoin-1].price.toFixed(4)}
+                      <span className={`ml-2 ${stablecoinData[selectedCoin-1].change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {stablecoinData[selectedCoin-1].change >= 0 ? '↑' : '↓'} 
+                        {Math.abs(stablecoinData[selectedCoin-1].change).toFixed(2)}%
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedCoin(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
                 </button>
-              }
-            >
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deviation</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volatility</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">On-Chain Flow</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market Cap</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Health</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    <tr className="hover:bg-gray-50 cursor-pointer">
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium text-blue-700 mr-2">U</div>
-                          <div>
-                            <div className="text-sm font-medium">USDC</div>
-                            <div className="text-xs text-gray-500">USD Coin</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$1.0002</div>
-                        <div className="text-xs text-green-600">+0.02%</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: '5%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.05%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: '2%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.02%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center text-sm">
-                          <ArrowUp size={14} className="text-green-500 mr-1" />
-                          <span className="font-medium">$39.2M</span>
-                        </div>
-                        <div className="text-xs text-gray-500">Net inflow 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$42.8B</div>
-                        <div className="text-xs text-green-600">+0.3% 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                          98.7% Healthy
-                        </span>
-                      </td>
-                    </tr>
-                    
-                    <tr className="hover:bg-gray-50 cursor-pointer">
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-medium text-green-700 mr-2">T</div>
-                          <div>
-                            <div className="text-sm font-medium">USDT</div>
-                            <div className="text-xs text-gray-500">Tether</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$0.9991</div>
-                        <div className="text-xs text-red-600">-0.09%</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-yellow-500 rounded-full" style={{ width: '12%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.12%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-yellow-500 rounded-full" style={{ width: '18%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.18%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center text-sm">
-                          <ArrowDown size={14} className="text-red-500 mr-1" />
-                          <span className="font-medium">$34.8M</span>
-                        </div>
-                        <div className="text-xs text-gray-500">Net outflow 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$84.3B</div>
-                        <div className="text-xs text-red-600">-0.2% 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                          91.2% Moderate
-                        </span>
-                      </td>
-                    </tr>
-                    
-                    <tr className="hover:bg-gray-50 cursor-pointer">
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-6 w-6 rounded-full bg-yellow-100 flex items-center justify-center text-xs font-medium text-yellow-700 mr-2">D</div>
-                          <div>
-                            <div className="text-sm font-medium">DAI</div>
-                            <div className="text-xs text-gray-500">Dai Stablecoin</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$1.0023</div>
-                        <div className="text-xs text-green-600">+0.23%</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: '8%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.08%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: '10%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.10%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center text-sm">
-                          <ArrowUp size={14} className="text-green-500 mr-1" />
-                          <span className="font-medium">$24.4M</span>
-                        </div>
-                        <div className="text-xs text-gray-500">Net inflow 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$5.3B</div>
-                        <div className="text-xs text-green-600">+1.2% 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                          95.5% Healthy
-                        </span>
-                      </td>
-                    </tr>
-                    
-                    <tr className="hover:bg-gray-50 cursor-pointer">
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center text-xs font-medium text-red-700 mr-2">F</div>
-                          <div>
-                            <div className="text-sm font-medium">FRAX</div>
-                            <div className="text-xs text-gray-500">Frax Finance</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$0.9721</div>
-                        <div className="text-xs text-red-600">-2.79%</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-red-500 rounded-full" style={{ width: '42%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.42%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center">
-                          <div className="h-1.5 w-16 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-red-500 rounded-full" style={{ width: '55%' }}></div>
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">0.55%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center text-sm">
-                          <ArrowDown size={14} className="text-red-500 mr-1" />
-                          <span className="font-medium">$35.3M</span>
-                        </div>
-                        <div className="text-xs text-gray-500">Net outflow 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-sm">$908M</div>
-                        <div className="text-xs text-red-600">-4.7% 24h</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                          76.8% At Risk
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
               </div>
               
-              {/* Peg Stability Chart - Valuable visualization */}
-              <div className="mt-6 border-t border-gray-200 pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-sm font-medium text-gray-700">Peg Stability Comparison ({timeframe})</h3>
-                  <div className="flex items-center text-xs space-x-4">
-                    <div className="flex items-center">
-                      <div className="h-2 w-2 bg-blue-500 rounded-full mr-1"></div>
-                      <span>USDC</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-2 w-2 bg-green-500 rounded-full mr-1"></div>
-                      <span>USDT</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-2 w-2 bg-yellow-500 rounded-full mr-1"></div>
-                      <span>DAI</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-2 w-2 bg-red-500 rounded-full mr-1"></div>
-                      <span>FRAX</span>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">Reserve Composition</h3>
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={Object.entries(stablecoinData[selectedCoin-1].reserves).map(([name, value]) => ({
+                            name,
+                            value
+                          }))}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={30}
+                          outerRadius={60}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {Object.entries(stablecoinData[selectedCoin-1].reserves).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                </div>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={currentPegData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis domain={[0.96, 1.01]} tickCount={6} tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <ReferenceLine y={1} stroke="#888" strokeDasharray="3 3" label={{ value: "Peg", position: "right" }} />
-                      <Line type="monotone" dataKey="USDC" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="USDT" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="DAI" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="FRAX" stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-md">
-                  <p className="text-xs text-blue-700"><strong>AI Insight:</strong> USDT showing unusual 4-hour oscillation pattern, similar to pre-depegging events in historical data. Monitoring recommended.</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* Right Column - High-Value Insights */}
-          <div className="col-span-12 md:col-span-4 space-y-6">
-            {/* Critical On-Chain Flows */}
-            <Card title={`Critical On-Chain Flows (${timeframe})`}>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={currentFlowsData} layout="vertical" margin={{ top: 5, right: 20, left: 30, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-                    <XAxis type="number" domain={[-300, 300]} tickCount={7} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="inflow" fill="#10b981" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="outflow" fill="#ef4444" radius={[4, 0, 0, 4]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>Outflows ($M)</span>
-                  <span>Inflows ($M)</span>
-                </div>
-                <div className="px-3 py-2 bg-yellow-50 border border-yellow-100 rounded-md mt-2">
-                  <p className="text-xs text-yellow-700"><strong>Unusual pattern:</strong> Net USDT outflow accelerating with 73% coming from three whale addresses. Historical correlation to market stress events.</p>
-                </div>
-              </div>
-            </Card>
-            
-            {/* Reserve Composition Analysis */}
-            <Card title="USDT Reserve Composition">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={reserveData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={25}
-                        outerRadius={45}
-                        fill="#8884d8"
-                        paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {reserveData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col justify-center">
-                  <div className="space-y-2">
-                    {reserveData.map((entry, index) => (
-                      <div key={index} className="flex items-center">
-                        <div className="h-3 w-3 rounded-sm mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                        <span className="text-xs">{entry.name}: {entry.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="px-3 py-2 bg-red-50 border border-red-100 rounded-md mt-3">
-                <p className="text-xs text-red-700"><strong>Risk Signal:</strong> Commercial Paper component increased 3% from previous audit. Similar to pre-UST-collapse reserve shifts.</p>
-              </div>
-            </Card>
-            
-            {/* Correlation Intelligence */}
-            <Card title="Stablecoin-Crypto Correlations">
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={correlationData}
-                    margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis domain={[0, 0.5]} tickCount={6} tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-md mt-3">
-                <p className="text-xs text-blue-700"><strong>Insight:</strong> USDT-ETH correlation at 0.31 has increased 128% in 7 days. Historically, this pattern precedes increased stablecoin volatility.</p>
-              </div>
-            </Card>
-          </div>
-          
-          {/* Multi-Exchange Liquidity Analysis */}
-          <div className="col-span-12">
-            <Card 
-              title="Multi-Exchange Liquidity Analysis"
-              headerAction={
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs text-gray-500">Displaying: Top 4 Stablecoins</span>
-                  <button className="flex items-center text-xs text-gray-500 hover:text-blue-600">
-                    <ChevronDown size={14} className="ml-1" />
-                  </button>
-                </div>
-              }
-            >
-              <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200">
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700">USDC Liquidity</h3>
-                    <span className="text-xs font-medium text-green-600">+2.3% 24h</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Curve 3pool</span>
-                        <span className="font-medium">$328M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: '85%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Uniswap v3</span>
-                        <span className="font-medium">$278M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: '72%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Binance</span>
-                        <span className="font-medium">$412M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: '95%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">Total: $1.23B (Healthy)</div>
                 </div>
                 
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700">USDT Liquidity</h3>
-                    <span className="text-xs font-medium text-red-600">-4.8% 24h</span>
+                <div className="md:col-span-2">
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">AI Risk Assessment</h3>
+                  <div className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                    <div className="flex items-start">
+                      <div className={`mt-0.5 mr-2 ${
+                        stablecoinData[selectedCoin-1].risk === 'Low' ? 'text-green-600' :
+                        stablecoinData[selectedCoin-1].risk === 'Medium' ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {stablecoinData[selectedCoin-1].risk === 'Low' ? 
+                          <CheckCircle size={16} /> : 
+                          stablecoinData[selectedCoin-1].risk === 'Medium' ? 
+                          <AlertCircle size={16} /> : <AlertTriangle size={16} />}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium">
+                          {stablecoinData[selectedCoin-1].risk} Risk
+                          <span className="ml-2 text-gray-500">({stablecoinData[selectedCoin-1].riskScore}/100)</span>
+                        </h3>
+                        <p className="text-sm mt-1">
+                          {stablecoinData[selectedCoin-1].name === 'USDC' ? 
+                            'USDC maintains strong reserve quality and transparency with regular attestations. High liquidity and institutional adoption provide stability.' : 
+                            stablecoinData[selectedCoin-1].name === 'USDT' ? 
+                            'USDT shows adequate stability but has concerns regarding reserve transparency and unusual exchange flows. Monitor for changes in market sentiment.' : 
+                            stablecoinData[selectedCoin-1].name === 'DAI' ? 
+                            'DAI demonstrates resilience through decentralized overcollateralization. Strong governance and historical stability during market stress events.' : 
+                            'FRAX is currently showing signs of instability with depeg risk. Algorithmic component and dropping collateral ratio increase vulnerability.'}
+                        </p>
+                        <button className="mt-2 text-xs bg-blue-600 text-white px-3 py-1 rounded flex items-center">
+                          Ask AI About {stablecoinData[selectedCoin-1].name}
+                          <ArrowRight size={14} className="ml-1" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Curve 3pool</span>
-                        <span className="font-medium">$412M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: '65%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Uniswap v3</span>
-                        <span className="font-medium">$364M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: '58%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Binance</span>
-                        <span className="font-medium">$782M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: '75%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">Total: $2.01B (⚠️ Decline Trend)</div>
                 </div>
-                
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700">DAI Liquidity</h3>
-                    <span className="text-xs font-medium text-green-600">+1.2% 24h</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Curve 3pool</span>
-                        <span className="font-medium">$218M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-yellow-500 rounded-full" style={{ width: '78%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Uniswap v3</span>
-                        <span className="font-medium">$192M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-yellow-500 rounded-full" style={{ width: '68%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Binance</span>
-                        <span className="font-medium">$124M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-yellow-500 rounded-full" style={{ width: '45%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">Total: $642M (Stable)</div>
-                </div>
-                
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700">FRAX Liquidity</h3>
-                    <span className="text-xs font-medium text-red-600">-18.4% 24h</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Curve FRAX3CRV</span>
-                        <span className="font-medium">$87M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-500 rounded-full" style={{ width: '42%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Uniswap v3</span>
-                        <span className="font-medium">$63M</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-500 rounded-full" style={{ width: '32%' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Liquidity Concerns</span>
-                        <span className="font-medium text-red-600">🔴 High</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-500 rounded-full" style={{ width: '85%' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-red-600 font-medium">Total: $178M (⚠️ Critical Decline)</div>
-                </div>
-              </div>
-            </Card>
-          </div>
-          
-          {/* AI Insights and Live Risk Alerts */}
-          <div className="col-span-12 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-4 border-b border-gray-200 bg-white rounded-t-lg">
-              <div className="flex items-center">
-                <Zap size={16} className="text-purple-600 mr-2" />
-                <h2 className="text-base font-medium text-gray-800">AI-Generated Risk Intelligence</h2>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">Real-Time Risk Signals</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <AlertTriangle size={14} className="text-red-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-red-600">Critical:</span> Two major USDT/USDC liquidity pools showing 73/27 ratio imbalance. Historical correlation with depegging events at 86%.
-                    </p>
+          )}
+        </div>
+        
+        {/* Right Side - AI Assistant & Alerts */}
+        <div className="col-span-12 lg:col-span-4 space-y-4">
+          {/* AI Assistant */}
+          <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${expanded ? 'fixed inset-4 z-50' : 'h-96'}`}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center">
+                <div className="bg-blue-100 p-1.5 rounded-full text-blue-700 mr-2">
+                  <MessageSquare size={18} />
+                </div>
+                <h2 className="font-medium text-gray-800">AI Assistant</h2>
+              </div>
+              <div className="flex items-center space-x-1">
+                <button 
+                  onClick={() => setExpanded(!expanded)} 
+                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500"
+                >
+                  {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </button>
+              </div>
+            </div>
+            
+            {/* Chat Messages */}
+            <div className="flex-grow overflow-y-auto p-4 space-y-4">
+              {messages.map((msg) => (
+                <div 
+                  key={msg.id} 
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div 
+                    className={`max-w-[90%] rounded-lg p-3 ${
+                      msg.sender === 'user' 
+                        ? 'bg-blue-600 text-white rounded-br-none' 
+                        : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                    }`}
+                  >
+                    {typeof msg.message === 'string' ? 
+                      renderMessageContent(msg.message) : 
+                      <p>{msg.message}</p>
+                    }
+                    
+                    {msg.hasChart && msg.chartType === 'yield' && (
+                      <div className="h-40 mt-3 mb-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={yieldData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tickCount={6} tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Bar dataKey="USDC" fill="#3b82f6" />
+                            <Bar dataKey="USDT" fill="#10b981" />
+                            <Bar dataKey="DAI" fill="#f59e0b" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                    
+                    {msg.hasChart && msg.chartType === 'frax' && (
+                      <div className="h-40 mt-3 mb-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={pegChartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                            <YAxis domain={[0.985, 1.005]} tickCount={5} tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Line type="monotone" dataKey="FRAX" stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Clock size={14} className="text-yellow-600" />
+                </div>
+              ))}
+              
+              {typing && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 rounded-lg rounded-bl-none p-3">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                     </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-yellow-600">Warning:</span> On-chain data shows $178M USDT moving to exchanges in past 6 hours. 74% higher than 30-day average.
-                    </p>
                   </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Activity size={14} className="text-blue-600" />
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
+            </div>
+            
+            {/* AI Suggestions */}
+            <div className="px-4 py-2 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Suggested questions:</p>
+              <div className="flex flex-wrap gap-2">
+                {aiSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Chat Input */}
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ask about stablecoin risks, markets, or strategies..."
+                  className="flex-grow border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className={`bg-blue-600 text-white p-2 rounded-r-lg ${
+                    inputMessage.trim() === '' ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
+                  }`}
+                  disabled={inputMessage.trim() === ''}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Risk Alerts */}
+          <div className={`bg-white rounded-lg shadow-sm p-4 ${expanded ? 'hidden' : 'block'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-medium text-gray-800">Risk Alerts</h2>
+              <button className="text-sm text-blue-600 hover:text-blue-800">View All</button>
+            </div>
+            
+            <div className="space-y-3">
+              {alertsData.map(alert => {
+                const styles = getAlertStyles(alert.type);
+                return (
+                  <div key={alert.id} className={`p-3 rounded ${styles.bgColor} ${styles.borderColor} border`}>
+                    <div className="flex items-start">
+                      <div className={`mt-0.5 mr-2 ${styles.iconColor}`}>
+                        {styles.icon}
+                      </div>
+                      <div className="flex-grow">
+                        <h3 className={`text-sm font-medium ${styles.textColor}`}>{alert.title}</h3>
+                        <p className="text-xs mt-0.5">{alert.message}</p>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-xs text-gray-500">{alert.time}</span>
+                          <button className="text-xs text-blue-600 hover:text-blue-800">
+                            Details
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-blue-600">Monitor:</span> DAI collateral ratio dropping but still within safe range at 152%. Unusual ETH collateral removal activity detected.
-                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* Yield Opportunities */}
+          <div className={`bg-white rounded-lg shadow-sm p-4 ${expanded ? 'hidden' : 'block'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-medium text-gray-800">Top Yields (Risk-Adjusted)</h2>
+              <button className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">
+                <BarChart2 size={14} className="mr-1" />
+                Filter by Risk
+              </button>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="p-3 bg-blue-50 rounded-md border border-blue-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-medium">USDC on Curve</h3>
+                    <p className="text-sm text-gray-600">3pool Strategy</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-blue-700">4.2%</div>
+                    <div className="text-xs text-gray-500">Risk: Low</div>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">Governance & Regulatory</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <AlertTriangle size={14} className="text-red-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-red-600">High Impact:</span> SEC document leak suggests imminent stablecoin regulation proposal targeting non-bank issuers. 78% confidence.
-                    </p>
+              <div className="p-3 bg-blue-50 rounded-md border border-blue-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-medium">DAI on Yearn</h3>
+                    <p className="text-sm text-gray-600">v2 Vault</p>
                   </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Clock size={14} className="text-yellow-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-yellow-600">Medium Impact:</span> MakerDAO vote on DAI interest rate model changes concludes in 18 hours. Current voting suggests 2.2% increase.
-                    </p>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Activity size={14} className="text-blue-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-blue-600">Low Impact:</span> USDC introducing enhanced audit framework with daily settlement verification. Confidence impact +3.8%.
-                    </p>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-blue-700">5.2%</div>
+                    <div className="text-xs text-gray-500">Risk: Medium</div>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">Market Sentiment Indicators</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <AlertTriangle size={14} className="text-yellow-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-yellow-600">Fear Level:</span> Social sentiment analysis shows 218% increase in negative USDT mentions. "Depeg" keyword up 112% in 24h.
-                    </p>
+              <div className="p-3 bg-yellow-50 rounded-md border border-yellow-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-medium">USDT on Aave</h3>
+                    <p className="text-sm text-gray-600">Lending</p>
                   </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Clock size={14} className="text-green-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-green-600">Market Confidence:</span> Institutional stablecoin positions show 8.3% increase in USDC holdings, 4.2% decrease in USDT exposure.
-                    </p>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <Activity size={14} className="text-blue-600" />
-                    </div>
-                    <p className="ml-2 text-xs text-gray-600">
-                      <span className="font-medium text-blue-600">Emerging Pattern:</span> Options market shows 5x spike in USDT de-peg insurance contracts. Similar to Feb 2023 pre-volatility pattern.
-                    </p>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-yellow-700">4.2%</div>
+                    <div className="text-xs text-gray-500">Risk: Medium</div>
                   </div>
                 </div>
               </div>
+            </div>
+            
+            <div className="mt-3">
+              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md text-sm font-medium">
+                Ask AI for Personalized Yield Strategy
+              </button>
             </div>
           </div>
         </div>
       </main>
-      {/* AI Assistant */}
-      {assistantOpen && (
-        <div className={`fixed ${assistantMinimized ? 'bottom-0 right-6 w-auto' : 'bottom-6 right-6 w-80 h-96'} z-50 bg-white rounded-lg shadow-lg border border-gray-200 transition-all duration-200 ease-in-out`}>
-          {/* Assistant Header */}
-          <div className="bg-blue-700 text-white p-3 rounded-t-lg flex justify-between items-center">
-            <div className="flex items-center">
-              <Bot size={18} className="mr-2" />
-              <h3 className="font-medium text-sm">Stablecoin Assistant</h3>
-            </div>
-            <div className="flex items-center space-x-1">
-              {assistantMinimized ? (
-                <button 
-                  onClick={() => setAssistantMinimized(false)}
-                  className="p-1 hover:bg-blue-600 rounded"
-                >
-                  <ChevronUp size={16} />
-                </button>
-              ) : (
-                <button 
-                  onClick={() => setAssistantMinimized(true)}
-                  className="p-1 hover:bg-blue-600 rounded"
-                >
-                  <MinusCircle size={16} />
-                </button>
-              )}
-              <button 
-                onClick={() => setAssistantOpen(false)}
-                className="p-1 hover:bg-blue-600 rounded"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-          
-          {/* Assistant Content */}
-          {!assistantMinimized && (
-            <>
-              {/* Messages */}
-              <div className="p-3 h-64 overflow-y-auto bg-gray-50">
-                {messages.map((message, index) => (
-                  <div key={index} className={`mb-3 ${message.role === 'user' ? 'text-right' : ''}`}>
-                    <div className={`inline-block p-2 rounded-lg ${message.role === 'user' ? 'bg-blue-100 text-blue-900' : 'bg-white border border-gray-200 text-gray-800'} text-sm max-w-[90%]`}>
-                      {message.content}
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-              
-              {/* Input */}
-              <div className="p-3 border-t border-gray-200">
-                <div className="flex">
-                  <input
-                    type="text"
-                    value={userInput}
-                    onChange={(e) => setUserInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Ask about stablecoins..."
-                    className="flex-grow text-sm border border-gray-300 rounded-l-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="bg-blue-700 text-white rounded-r-md px-3 hover:bg-blue-800"
-                  >
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-      
-      {/* Assistant Toggle Button (only shown when assistant is closed) */}
-      {!assistantOpen && (
-        <button
-          onClick={() => setAssistantOpen(true)}
-          className="fixed bottom-6 right-6 bg-blue-700 text-white p-3 rounded-full shadow-lg hover:bg-blue-800 z-50 flex items-center justify-center"
-        >
-          <MessageSquare size={20} />
-        </button>
-      )}
     </div>
   );
 };
 
-export default StablecoinDashboard;
+export default StablecoinAIDashboard;
