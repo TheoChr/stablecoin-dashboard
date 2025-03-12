@@ -1,4 +1,3 @@
-import { AlertTriangle, Activity, TrendingUp, /* other imports */, CheckCircle } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { Activity, AlertTriangle, TrendingUp, ChevronRight, ArrowRight, ArrowUp, ArrowDown, RefreshCw, Search, Menu, X, MessageSquare, User, Send, AlertCircle, Clock, HelpCircle, FileText, Zap, Settings, BarChart2, ExternalLink, ChevronDown, Eye, Maximize2, Minimize2 } from 'lucide-react';
